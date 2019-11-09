@@ -1,2 +1,4 @@
 demo/.ipynb_checkpoints
 .DS_Store
+settings.json
+src/demo/.ipynb_checkpoints/*
