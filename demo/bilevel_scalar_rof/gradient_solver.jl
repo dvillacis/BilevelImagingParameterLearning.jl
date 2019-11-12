@@ -43,12 +43,12 @@ function gradient_solver(u,ut,lambda,K,nabla)
     K = Variation(size(u))
     Ku = K*u
     nKu = vec(sqrt.(sum(Ku.^2,dims=2))) # Pointwise euclidean norm
-    nKu = vcat(nKu,nKu) # Replication of the norm to be the same size as Ku
-    act = nKu.<1e-3
+    nKu2 = vcat(nKu,nKu) # Replication of the norm to be the same size as Ku
+    act = nKu2.<1e-3
     inact = 1 .- act
     Act = spdiagm(0=>act)
     Inact = spdiagm(0=>inact)
-    den = Inact*nKu+act
+    den = Inact*nKu2+act
     prodKuKu = outer_product(Ku[:]./(den.^3),Ku[:],m,n)
     A = sparse(I,sz,sz)
     B = nabla'
@@ -57,6 +57,13 @@ function gradient_solver(u,ut,lambda,K,nabla)
     E = Act*nabla
     Adj = [A B;E-C Inact+sqrt(0.1)*Act]
     Track = [u[:]-ut[:];spzeros(2*sz,1)]
-    mult,ch = cg(Adj,Track,maxiter=1000,tol=1e-2,log=true)
-    return mult[1:sz],ch
+    mult,ch = cg(Adj,Track,maxiter=100,tol=1e-2,log=true)
+    adj = mult[1:sz]
+
+    beta = 0
+    gamma = Ku./hcat(nKu,nKu)
+    t = sparse(K'*gamma)
+    println(typeof(t[:]))
+    println(typeof(adj))
+    return t[:]*adj #+ beta*lambda
 end
