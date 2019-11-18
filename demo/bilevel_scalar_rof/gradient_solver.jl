@@ -36,6 +36,18 @@ function gradient_matrix(s::Tuple)
     return gradient_matrix(m,m)
 end
 
+function prodesc(p,q,m,n,nKu)
+    p = reshape(p,m*n,2)
+    q = reshape(q,m*n,2)
+    s = 0
+    for i = 1:m*n
+        if nKu[i] > 1e-3
+            s += p[i,:]'*q[i,:]
+        end
+    end
+    return s
+end
+
 #TODO: Seria bueno que K tenga tambien una representacion matricial
 function gradient_solver(u,z,lambda,alpha,K,nabla)
     m,n = size(u)
@@ -51,17 +63,19 @@ function gradient_solver(u,z,lambda,alpha,K,nabla)
     den = Inact*nKu+act
     prodKuKu = outer_product(Ku[:]./(den.^3),Ku[:],m,n)
     A = sparse(I,sz,sz)
-    B = nabla'
-    C = -Inact*(lambda*prodKuKu-spdiagm(0=> 1 ./ den))*nabla
+    B = lambda*nabla'
+    C = -Inact*(prodKuKu-spdiagm(0=> 1 ./ den))*nabla
     D = Act*nabla
     Adj = [A B;D-C Inact+sqrt(eps())*Act]
-    Track = [u[:]-z[:];zeros(2*sz,1)]
+    Track = [z[:]-u[:];zeros(2*sz,1)]
     #mult,ch = idrs(Adj,Array(Track),tol=1e-2,log=true)
     # println(ch.isconverged)
     # adj = mult[1:sz]
     mult = Adj\Track
     adj = mult[1:sz]
     #return adj
-    grad = (u[:]-z[:])'*adj + alpha*lambda
+    Kp = K*reshape(adj,m,n)
+    grad = prodesc(Kp,Ku[:]./den,m,n,nKu) + alpha*lambda
+    #grad = (u[:]-z[:])'*adj + alpha*lambda
     return grad
 end
