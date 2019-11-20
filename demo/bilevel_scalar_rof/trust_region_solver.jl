@@ -11,13 +11,28 @@ include("gradient_solver.jl")
 end
 
 function trust_region_subproblem(lambda,g,H,radius)
-    f_univariate(x) = H*x^2 + g*x
-    if lambda >= radius
-        res = Optim.optimize(f_univariate, -radius, radius)
+    # f_univariate(x) = H*x^2 + g*x + c
+    # if lambda >= radius
+    #     res = Optim.optimize(f_univariate, -radius, radius)
+    # else
+    #     res = Optim.optimize(f_univariate, -radius, radius)
+    # end
+    # return Optim.minimizer(res)
+    sn = -H\g
+    predn = -g*sn-0.5*sn*H*sn
+    if g*H*g <= 0
+        t = radius/(norm(g))
     else
-        res = Optim.optimize(f_univariate, -lambda, radius)
+        t=min(norm(g)^2/(g'*H*g),radius/norm(g))
     end
-    return Optim.minimizer(res)
+    sc = -t*g
+    predc = -g*sc-0.5*sc*H*sc
+    if norm(sn) <= radius && predn > 0.8*predc
+        s = sn
+    else
+        s = sc
+    end
+    return s
 end
 
 function update_bfgs_approximation(grad,grad_prev,lambda,lambda_prev,B)
@@ -40,19 +55,16 @@ end
 
 function update_sr1_approximation(grad,grad_prev,lambda,lambda_prev,B)
     s = lambda-lambda_prev
-    if abs(s) > 0
-        Bs = B*s
-        y = grad-grad_prev
-        if norm(y) > 1e-3
-            u = y-Bs
-            if abs(s'*u) > 1e-9 * norm(s)*norm(u)
-                B = B + (u.^2/(u'*s))
-            else
-                print(" * ")
-            end
+    Bs = B*s
+    y = grad-grad_prev
+    if norm(y) > 1e-10
+        u = y-Bs
+        #println("$(s), $(u), $(abs(s'*u) > 1e-10 * norm(s)*norm(u))")
+        if abs(s'*u) > 1e-10 * norm(s)*norm(u)
+            B += u.^2/(u'*s)
+        else
+            print(" * ")
         end
-    # else
-    #     println("no change in lambda -- skipping bfgs update")
     end
     return B
 end
@@ -61,46 +73,49 @@ end
 function trust_region_solver(lower_level_solver::Function,upper_level_cost::Function,lambda_0,α,f,z,radius,tol,model::Integer)
     
     # Variable Initialization
-    eta_1 = 0.1
-    eta_2 = 0.9
+    eta_1 = 0.25
+    eta_2 = 0.75
     beta_1 = 0.5
     beta_2 = 1.5
 
     lambda = lambda_0
-    lambda_prev = lambda_0
     K = Variation(size(f))
     u = Variable(size(K,1)...)
     nabla = gradient_matrix(size(f))
     it = 1
 
     # Second order information
+    H_k = -0.1
     if model == 1
         H_k = 0
-    else
-        H_k = 0.1
-        u_0 = lower_level_solver(u,f,lambda_prev,K)
-        g_prev = gradient_solver(u_0,z,lambda_prev,α,K,nabla)
     end
+
+    g_prev = 0
+    lambda_prev = 0
 
     while radius > tol
         print("TR Iteration $it: \t")
+
         u_k = lower_level_solver(u,f,lambda,K)
         g_k = gradient_solver(u_k,z,lambda,α,K,nabla)
         if norm(g_k) < tol
             break
         end
 
-        if model == 2
-            H_k = update_sr1_approximation(g_k,g_prev,lambda,lambda_prev,H_k)
-        elseif model == 3
-            H_k = update_bfgs_approximation(g_k,g_prev,lambda,lambda_prev,H_k)
-        end
-
         # Solve trust region subproblem
         s_k = trust_region_subproblem(lambda,g_k,H_k,radius)
 
+        if it >= 2
+            if model == 2
+                H_k = update_sr1_approximation(g_k,g_prev,lambda,lambda_prev,H_k)
+            elseif model == 3
+                H_k = update_bfgs_approximation(g_k,g_prev,lambda,lambda_prev,H_k)
+            end
+        end
+
         # Quality indicator calculation
         cost = upper_level_cost(u_k,z,lambda,α)
+        println("$lambda, $s_k")
         u_k_ = lower_level_solver(u,f,lambda+s_k,K)
         cost_ = upper_level_cost(u_k_,z,lambda+s_k,α)
         ared_k = cost-cost_
@@ -108,7 +123,7 @@ function trust_region_solver(lower_level_solver::Function,upper_level_cost::Func
         #println("$cost, $cost_, $ared_k, $pred_k")
         rho_k = ared_k/pred_k
 
-        print("rho_k = $(round(rho_k,digits=3)), radius = $(round(radius,digits=4)), lambda = $(round(lambda,digits=4)), g_k = $(round(g_k,digits=3)), s_k = $(round(s_k,digits=3)), H_k = $(round(H_k,digits=2))\n")
+        print("lambda = $(round(lambda,digits=4)), rho_k = $(round(rho_k,digits=3)), radius = $(round(radius,digits=4)), g_k = $(round(g_k,digits=3)), s_k = $(round(s_k,digits=3)), H_k = $(round(H_k,digits=2))\n")
         
         # Update
         if rho_k > eta_1
@@ -122,10 +137,8 @@ function trust_region_solver(lower_level_solver::Function,upper_level_cost::Func
         end
 
         # Save previous step
-        if lambda-lambda_prev > 0
-            lambda_prev = lambda
-            g_prev = g_k
-        end
+        lambda_prev = lambda
+        g_prev = g_k
 
         
         it += 1
