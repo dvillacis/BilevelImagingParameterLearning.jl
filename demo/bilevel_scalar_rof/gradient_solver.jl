@@ -49,21 +49,21 @@ function prodesc(p,q,m,n,nKu)
 end
 
 #TODO: Seria bueno que K tenga tambien una representacion matricial
-function gradient_solver(u,z,lambda,alpha,K,nabla)
+function gradient_solver(u,f,z,lambda,alpha,K,nabla)
     m,n = size(u)
     sz = m*n
     K = Variation(size(u))
     Ku = K*u
     nKu = vec(sqrt.(sum(Ku.^2,dims=2))) # Pointwise euclidean norm
     nKu = vcat(nKu,nKu) # Replication of the norm to be the same size as Ku
-    act = nKu.<1e-3
+    act = nKu.<1e-9
     inact = 1 .- act
     Act = spdiagm(0=>act)
     Inact = spdiagm(0=>inact)
     den = Inact*nKu+act
     prodKuKu = outer_product(Ku[:]./(den.^3),Ku[:],m,n)
-    A = sparse(I,sz,sz)
-    B = lambda*nabla'
+    A = lambda*sparse(I,sz,sz)
+    B = nabla'
     C = -Inact*(prodKuKu-spdiagm(0=> 1 ./ den))*nabla
     D = Act*nabla
     Adj = [A B;D-C Inact+sqrt(eps())*Act]
@@ -74,8 +74,8 @@ function gradient_solver(u,z,lambda,alpha,K,nabla)
     mult = Adj\Track
     adj = mult[1:sz]
     #return adj
-    Kp = K*reshape(adj,m,n)
-    grad = prodesc(Kp,Ku[:]./den,m,n,nKu) + alpha*lambda
-    #grad = (u[:]-z[:])'*adj + alpha*lambda
+    #Kp = K*reshape(adj,m,n)
+    #grad = prodesc(Kp,Ku[:]./den,m,n,nKu) + alpha*lambda
+    grad = (u[:]-f[:])'*adj + alpha*lambda
     return grad
 end
