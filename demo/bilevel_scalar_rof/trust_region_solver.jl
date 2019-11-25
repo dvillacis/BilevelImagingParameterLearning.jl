@@ -64,7 +64,7 @@ function update_sr1_approximation(grad,grad_prev,lambda,lambda_prev,B)
 end
 
 
-function trust_region_solver(lower_level_solver::Function,upper_level_cost::Function,lambda_0,α,f,z,radius,tol,model::Integer)
+function trust_region_solver(lower_level_solver::Function,upper_level_cost::Function,lambda_0,α,f,z,radius,tol,model::Integer,check::Integer)
     
     # Variable Initialization
     eta_1 = 0.1
@@ -120,7 +120,7 @@ function trust_region_solver(lower_level_solver::Function,upper_level_cost::Func
         end
         rho_k = ared_k/pred_k
         
-        if it % 100 == 0
+        if it % check == 0
             print("TR Iteration $it: \t")
             print("lambda = $(round(lambda,digits=4)), rho_k = $(round(rho_k,digits=3)), radius = $radius, g_k = $(round(g_k,digits=3)), s_k = $(round(s_k,digits=3)), H_k = $(round(H_k,digits=2))\n")
         end
