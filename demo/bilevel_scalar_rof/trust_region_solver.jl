@@ -74,7 +74,6 @@ function trust_region_solver(lower_level_solver::Function,upper_level_cost::Func
 
     lambda = lambda_0
     K = Variation(size(f))
-    u = Variable(size(K,1)...)
     nabla = gradient_matrix(size(f))
     it = 1
 
@@ -88,9 +87,8 @@ function trust_region_solver(lower_level_solver::Function,upper_level_cost::Func
     lambda_prev = lambda_0
 
     while radius > tol
-        
-        u_k = lower_level_solver(u,f,lambda,K)
-        g_k = gradient_solver(u_k,f,z,lambda,α,K,nabla)
+        u_k = lower_level_solver(f,lambda,K)
+        g_k = gradient_solver(u_k,f,z,lambda,α,K,nabla,radius)
         if norm(g_k) < tol
             print("lambda = $(round(lambda,digits=4)), radius = $(round(radius,digits=4)), g_k = $(round(g_k,digits=3))\n")
             break
@@ -111,7 +109,7 @@ function trust_region_solver(lower_level_solver::Function,upper_level_cost::Func
         cost = upper_level_cost(u_k,z,lambda,α)
         pred_k = -g_k'*s_k - 0.5*s_k'*H_k*s_k
         if lambda+s_k > 0
-            u_k_ = lower_level_solver(u,f,lambda+s_k,K)
+            u_k_ = lower_level_solver(f,lambda+s_k,K)
             cost_ = upper_level_cost(u_k_,z,lambda+s_k,α)
             ared_k = cost-cost_
             #println("$cost, $cost_, $ared_k, $pred_k")
@@ -147,9 +145,4 @@ function trust_region_solver(lower_level_solver::Function,upper_level_cost::Func
     end
 
     return lambda
-end
-
-function trust_region_solver(lower_level_solver::Function,upper_level_cost::Function,lambda_0,α,f,z,radius)
-    tol = 1e-3
-    trust_region_solver(lower_level_solver,upper_level_cost,lambda_0,α,f,z,radius,tol)
 end

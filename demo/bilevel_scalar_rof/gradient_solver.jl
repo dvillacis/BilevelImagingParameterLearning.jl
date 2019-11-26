@@ -40,8 +40,6 @@ end
 function adjoint_solver_nonreg(u,Ku,nKu,f,z,λ,K,∇)
     m,n = size(u)
     sz = m*n
-    L = λ*ones(sz,1)
-    L = spdiagm(0=>vec(L))
     act = nKu.<1e-9
     inact = 1 .- act
     Act = spdiagm(0=>act)
@@ -49,11 +47,11 @@ function adjoint_solver_nonreg(u,Ku,nKu,f,z,λ,K,∇)
     den = Inact*nKu+act
     prodKuKu = outer_product(Ku[:]./(den.^3),Ku[:],m,n)
     A = λ*sparse(I,sz,sz)
-    B = ∇'
+    B = -∇'
     C = -Inact*(prodKuKu-spdiagm(0=> 1 ./ den))*∇
     D = Act*∇
     Adj = [A B;D-C Inact+sqrt(eps())*Act]
-    Track = [z[:]-u[:];zeros(2*sz,1)]
+    Track = [u[:]-z[:];zeros(2*sz,1)]
     mult = Adj\Track
     adj = mult[1:sz]
     return adj
@@ -96,8 +94,8 @@ function adjoint_solver_reg(u,Ku,nKu,f,z,λ,K,∇)
     hess22=Dmi*∇ - kron(I(2),(Act+Sact))*Dmi*H4*∇ + sk2*prodKuKu*∇
 
     A = λ*sparse(I,sz,sz)
-    B = ∇';
-    adj=(A+B*hess22+L)\(z[:]-u[:])
+    B = -∇';
+    adj=(A+B*hess22)\(u[:]-z[:])
 
     return adj
 end
@@ -115,7 +113,7 @@ function gradient_solver(u,f,z,λ,α,K,∇,radius,radiusmin)
     else
         adj = adjoint_solver_reg(u,Ku,nKu,f,z,λ,K,∇)
     end
-    return (u[:]-f[:])'*adj + α * λ
+    return (f[:]-u[:])'*adj + α * λ
 end
 
 function gradient_solver(u,f,z,λ,α,K,∇,radius)
